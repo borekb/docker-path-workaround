@@ -1,48 +1,78 @@
 # Docker in Git Bash / MSYS2 on Windows: path conversion workaround
 
-Git Bash is an awesome shell that comes with [Git for Windows](https://gitforwindows.org/) but Docker and Docker Compose don't work well in it due to path conversions, see e.g. [this issue](https://github.com/docker/toolbox/issues/673). Same with MSYS2 shells.
+> **UPDATE 07/2018**: I switched from Git Bash to MSYS2 recently which should be very similar, if not the same, but there some subtle differences which made me realize this is more tricky than I thought and that I don't 100% understand what is going on. If someone can help, please let me know in the comments.
 
-To confirm that you have the problem, run this:
+Invoking `docker` in MSYS2 shell or Git Bash typically fails with complains about paths, for example:
 
 ```
 $ docker run --rm -it ubuntu /bin/bash
-```
-
-If you get this error, you're impacted:
-
-```
 stat C:/Program Files/Git/usr/bin/bash: no such file or directory
 ```
 
-Note how the Linux path is prepended with `C:/Program Files/Git` which is of course completely wrong from the container's point of view. Another common example is volume mapping, e.g.:
+or
 
 ```
 docker run -v "$PWD":/var/www/html php:7-apache
+# (complains about C:/... path)
 ```
 
-This commonly fails as well.
+Note how the Linux path is prepended with `C:/Program Files/Git` which obviously breaks some of the commands.
 
-The key to a solution is to set either the `MSYS_NO_PATHCONV` variable for Git Bash shell, or `MSYS2_ARG_CONV_EXCL` for MSYS shells.
+This happens because MSYS2 shells (which includes Git Bash) translate Linux paths to Windows paths whenever a native Windows binary is called. This is generally a good thing, making it possible to run e.g. `notepad /c/some/file.txt` from Git Bash.
 
-Create two small scripts, `docker` and `docker-compose` (no extension) in some location that has **higher-priority than Docker's path**. Docker is quite aggressive and puts itself very high in the list, the safest way is to become no. 1 **system path** (not user path) to beat it. Here is an example from my computer:
+But with Docker, you typically want Linux paths, or, actually, it depends. This simple example is already very tricky:
+
+```
+docker run --rm -it -v "$PWD":/tmp/mounted ubuntu /bin/bash
+```
+
+- There is volume mapping. Because Docker doesn't support relative paths here, `"$PWD"` or `` `pwd` `` needs to be used. This might resolve to something like `/c/some/path` which might get translated to `C:\\some\\path`. Now it depends whether `docker.exe` supports this or not (it seems it does on Windows).
+- The `-t` option might be problematic in mintty and other terminals, yielding an error like _"the input device is not a TTY.  If you are using mintty, try prefixing the command with 'winpty'"_.
+- `/bin/bash` should definitely not be translated to `C:/Program Files/Git/usr/bin/bash`, that is plain wrong.
+
+As a base for the workaround, create a small `docker` script (no extension) somewhere in your PATH, and make sure this script is higher-priority than the path of `docker.exe`. Docker is quite aggressive and puts itself very high in the list, the safest way is to become no. 1 **system path** (not user path) to beat it. Here is an example from my computer:
 
 ![image](https://user-images.githubusercontent.com/101152/39303507-b980631a-4956-11e8-8374-5182385a15a1.png)
 
-The contents of the `docker` proxy script should look like this:
+Verify with this:
 
-```sh
-#!/bin/bash
-
-if [[ -v MSYS2_PATH_TYPE ]]; then
-    # !!! Until https://github.com/Alexpux/MSYS2-packages/issues/411 is resolved,
-    # !!! make sure you use winpty binaries from https://github.com/rprichard/winpty/releases
-    # !!! *not* from `pacman -S winpty`.
-    (export MSYS2_ARG_CONV_EXCL="*"; winpty "docker.exe" "$@")
-else
-    (export MSYS_NO_PATHCONV=1; "docker.exe" "$@")
-fi
+```
+$ type -a docker
+docker is /c/Users/Borek/OneDrive/Programs/cmder/bin/docker
+docker is /c/Program Files/Docker/Docker/Resources/bin/docker
 ```
 
-Similarly for `docker-compose`.
+Your script must be first!
+
+Now, put this into your script:
+
+```
+#!/bin/bash
+winpty "docker.exe" "$@"
+```
+
+> ❗ Until https://github.com/Alexpux/MSYS2-packages/issues/411 is resolved, make sure you use winpty binaries from https://github.com/rprichard/winpty/releases, _not_ from `pacman -S winpty`.
+
+That should be it. Try running this:
+
+```
+docker run --rm -it -v "$PWD":/tmp/mounted ubuntu /bin/bash
+```
+
+Inside the container session, `ls /tmp/mounted` should list your local PWD directory.
+
+If that doesn't work, you can try either the `MSYS_NO_PATHCONV` or `MSYS2_ARG_CONV_EXCL` environment variables. For example, I used this in the past:
+
+```
+# Git Bash shell:
+(export MSYS_NO_PATHCONV=1; "docker.exe" "$@")
+
+# MSYS2 mingw64 shell:
+(export MSYS2_ARG_CONV_EXCL="*"; winpty "docker.exe" "$@")
+```
+
+However, I no longer seem to need it. I don't fully understand why.
+
+For `docker-compose`, do the same.
 
 Hope this helps.
