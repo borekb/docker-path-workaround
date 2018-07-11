@@ -1,3 +1,5 @@
+# Docker in Git Bash / MSYS2 on Windows: path conversion workaround
+
 Git Bash is an awesome shell that comes with [Git for Windows](https://gitforwindows.org/) but Docker and Docker Compose don't work well in it due to path conversions, see e.g. [this issue](https://github.com/docker/toolbox/issues/673). Same with MSYS2 shells.
 
 To confirm that you have the problem, run this:
