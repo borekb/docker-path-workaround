@@ -1,4 +1,6 @@
-# Docker in Git Bash / MSYS2 on Windows: path conversion workaround
+# Path conversion workaround for Docker in Git Bash / MSYS2 on Windows
+
+> **UPDATE 03/2019**: I no longer use Windows and there have been some recent developments like ConPTY shipping in Windows 10 Fall 2018 update (1809) so I'm not entirely sure if the info below is still useful or valid. Feel free to open issues / send pull requests. 
 
 > **UPDATE 07/2018**: I switched from Git Bash to MSYS2 recently which should be very similar, if not the same, but there some subtle differences which made me realize this is more tricky than I thought and that I don't 100% understand what is going on. If someone can help, please let me know in the comments.
 
@@ -76,3 +78,7 @@ However, I no longer seem to need it. I don't fully understand why.
 For `docker-compose`, do the same.
 
 Hope this helps.
+
+---
+
+_This has been originally published [as this Gist](https://gist.github.com/borekb/cb1536a3685ca6fc0ad9a028e6a959e3)._
